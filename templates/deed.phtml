@@ -49,10 +49,11 @@
 						$num_page = ceil($num_row / 20);
 						for($i = 1; $i <= $num_page; $i++){
 							// echo '<pre>',print_r(getMorePage($i, $selChangwat,$chanode_no),1),'</pre>';
+							// return;
 							$data_insert = getMorePage($i, $selChangwat,$chanode_no); 
 							if (count($data_insert) > 0 ) {
 								foreach ($data_insert as $deed) {
-									$pdo->insert(['id_province','district','price','deed','sheet','utm','survey','land_no','sub_district','office'])->into('deed')->values([ ''.$deed['id_province'].'',''.$deed['district'].'', ''.$deed['price'].'', ''.$deed['deed'].'',''.$deed['sheet'].'',''.$deed['utm'].'',''.$deed['survey'].'',''.$deed['land_no'].'',''.$deed['sub_district'].'',''.$deed['office'].''])->execute(true);
+									$pdo->insert(['id_province','district','price','deed','sheet','utm','survey','land_no','sub_district','office','landid','changwat','amphur'])->into('deed')->values([ ''.$deed['id_province'].'',''.$deed['district'].'', ''.$deed['price'].'', ''.$deed['deed'].'',''.$deed['sheet'].'',''.$deed['utm'].'',''.$deed['survey'].'',''.$deed['land_no'].'',''.$deed['sub_district'].'',''.$deed['office'].'',''.$deed['landid'].'',''.$deed['changwat'].'',''.$deed['amphur'].''])->execute(true);
 								}
 							}
 						}
@@ -69,9 +70,9 @@
 		$detail = explode(');', $detail[1]);
 		$detail = explode(',', $detail[0]);
 
-		$result['nrg_n'] = $detail[0];
-		$result['cw'] = $detail[1];
-		$result['br'] = $detail[2];
+		$result['landid'] = $detail[0];
+		$result['changwat'] = $detail[1];
+		$result['amphur'] = $detail[2];
 		return $result;
 	}
 
@@ -110,7 +111,7 @@
 				 		$tds = $tables_n->getElementsByTagName('td'); 
 				 		$tds_0 = $tr_0->getElementsByTagName('td')->item(0)->nodeValue; 
 				 		$head_td = explode('/', $tds_0);
-
+				        $detail_obj[$num] =  getAppraise($tds->item(7)->getElementsByTagName('a')->item(0)->getAttribute('onclick'));
 				        $detail_obj[$num]['id_province'] =  $selChangwat;
 				        $detail_obj[$num]['office'] 	=  $head_td[1];
 				        $detail_obj[$num]['district'] 	=  $head_td[2];
