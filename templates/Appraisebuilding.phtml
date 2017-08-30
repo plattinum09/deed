@@ -1,0 +1,111 @@
+<?php
+	$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+	$usr = 'tecmove';
+	$pwd = 'tecmove1';
+	$pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+
+	$selectStatement = $pdo->select(['PROVINCE_CODE'])->from('province');
+	$stmt = $selectStatement->execute();
+	$province = $stmt->fetchAll();
+	$global_obj  = [];
+
+	foreach ($province as $key => $provinc_id) {
+		// echo $provinc_id['PROVINCE_CODE'].'</br>';
+		// $provinc_id['PROVINCE_CODE'] = 81;
+    	$curl = curl_init();
+    	curl_setopt_array($curl, array(
+		CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/s_condo_result.asp",
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_TIMEOUT => 30,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "POST",
+		CURLOPT_POSTFIELDS => "selChangwat=".$provinc_id['PROVINCE_CODE']."&constr_code=",
+		CURLOPT_HTTPHEADER => array(
+			"cache-control: no-cache",
+			"content-type: application/x-www-form-urlencoded",
+			"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+
+		$firstTable = $dom->getElementsByTagName('table')->item(0);
+		$tr = $firstTable->childNodes;
+		foreach ($tr as $node_tr) {
+			$td = $node_tr->childNodes;
+			$span = $td->item(0)->childNodes;				
+			if(!is_null($span)){
+				// จำนวนทั้งหมด				
+				$num_row = intval($span->item(1)->nodeValue);
+			} 
+			if ($num_row != 0) {
+				// echo $provinc_id['PROVINCE_CODE'].'จำนวนทั้งหมด'.$num_row."</br>";
+				$num_page = ceil($num_row / 24);
+				for($i = 1; $i <= $num_page; $i++){
+					foreach (getMorePage($i, $provinc_id['PROVINCE_CODE']) as $appraise) {
+						$pdo->insert(['apartment','nrg_n','cw','br','province'])->into('appraise')->values([ ''.$appraise['apartment'].'',''.$appraise['nrg_n'].'', ''.$appraise['cw'].'', ''.$appraise['br'].'',''.$appraise['province'].''])->execute(true);
+					}
+				}
+			}
+		}
+	}
+
+	function getAppraise($detail)
+	{
+		$detail = str_replace("'", "", $detail);
+		$detail = explode('(', $detail);
+		$detail = explode(');', $detail[1]);
+		$detail = explode(',', $detail[0]);
+
+		$result['nrg_n'] = $detail[0];
+		$result['cw'] = $detail[1];
+		$result['br'] = $detail[2];
+		return $result;
+	}
+
+	function getMorePage($i, $selChangwat, $chanode_no = null, $survey_no = null)
+	{
+		// echo $selChangwat.'='.$i.'</br>';
+		global $global_obj;
+		$detail_obj = [];
+		$curl = curl_init();
+    	curl_setopt_array($curl, array(
+		CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/s_condo_result.asp",
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_TIMEOUT => 30,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "POST",
+		CURLOPT_POSTFIELDS => "selChangwat=".$selChangwat."&constr_code=&page=".$i."",
+		CURLOPT_HTTPHEADER => array(
+			"cache-control: no-cache",
+			"content-type: application/x-www-form-urlencoded",
+			"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+
+		$dataTable 	= $dom->getElementsByTagName('table')->item(1);
+		foreach($dataTable->getElementsByTagName('tr') as $key => $tr){
+	 	$tds = $tr->getElementsByTagName('td'); // get the columns in this row
+			if($key != 0){
+		        $detail_obj[$key] =  getAppraise($tds->item(0)->getElementsByTagName('a')->item(0)->getAttribute('onclick'));
+		        $detail_obj[$key]['apartment'] =  $tds->item(0)->nodeValue;
+		        $detail_obj[$key]['province'] =  $selChangwat;
+		    }
+		}
+		return $detail_obj;
+	}
+?>

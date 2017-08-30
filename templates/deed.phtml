@@ -1,0 +1,128 @@
+<?php
+	$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+	$usr = 'tecmove';
+	$pwd = 'tecmove1';
+	$pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+
+	$selectStatement = $pdo->select(['PROVINCE_CODE'])->from('province');
+	$stmt = $selectStatement->execute();
+	$province = $stmt->fetchAll();
+	$global_obj  = [];
+	foreach ($province as $key => $provinc_id) {
+		echo $provinc_id['PROVINCE_CODE'].'</br>';
+		for ($i=0; $i < 200000 ; $i++) { 
+			$chanode_no = $i;
+			$selChangwat = $provinc_id['PROVINCE_CODE'];
+	    	$curl = curl_init();
+	    	curl_setopt_array($curl, array(
+			CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/s_land1_result.asp",
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_ENCODING => "",
+			CURLOPT_MAXREDIRS => 10,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+			CURLOPT_CUSTOMREQUEST => "POST",
+			CURLOPT_POSTFIELDS => "chanode_no=".$chanode_no."&survey_no=&selChangwat=".$selChangwat."",
+			CURLOPT_HTTPHEADER => array(
+				"cache-control: no-cache",
+				"content-type: application/x-www-form-urlencoded",
+				"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+				),
+			));
+		    $response = curl_exec($curl);
+		    $err = curl_error($curl);
+		    curl_close($curl);
+
+		 	$dom = new DOMDocument();
+			@$dom->loadHTML($response);
+			$firstTable = $dom->getElementsByTagName('table');
+			if ($firstTable->length > 0) {
+				$tr = $firstTable->item(0)->childNodes;
+				foreach ($tr as $node_tr) {
+					$td = $node_tr->childNodes;
+					$span = $td->item(0)->childNodes;				
+					if(!is_null($span)){
+						// จำนวนทั้งหมด				
+						$num_row = intval($span->item(1)->nodeValue);
+					} 
+					if ($num_row > 0) {
+						$num_page = ceil($num_row / 20);
+						for($i = 1; $i <= $num_page; $i++){
+							// echo '<pre>',print_r(getMorePage($i, $selChangwat,$chanode_no),1),'</pre>';
+							$data_insert = getMorePage($i, $selChangwat,$chanode_no); 
+							if (count($data_insert) > 0 ) {
+								foreach ($data_insert as $deed) {
+									$pdo->insert(['id_province','district','price','deed','sheet','utm','survey','land_no','sub_district','office'])->into('deed')->values([ ''.$deed['id_province'].'',''.$deed['district'].'', ''.$deed['price'].'', ''.$deed['deed'].'',''.$deed['sheet'].'',''.$deed['utm'].'',''.$deed['survey'].'',''.$deed['land_no'].'',''.$deed['sub_district'].'',''.$deed['office'].''])->execute(true);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	function getAppraise($detail)
+	{
+		$detail = str_replace("'", "", $detail);
+		$detail = explode('(', $detail);
+		$detail = explode(');', $detail[1]);
+		$detail = explode(',', $detail[0]);
+
+		$result['nrg_n'] = $detail[0];
+		$result['cw'] = $detail[1];
+		$result['br'] = $detail[2];
+		return $result;
+	}
+
+	function getMorePage($i, $selChangwat, $chanode_no = null, $survey_no = null){
+		global $global_obj;
+		$detail_obj = [];
+		$curl = curl_init();
+    	curl_setopt_array($curl, array(
+		CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/s_land1_result.asp",
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_TIMEOUT => 30,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "POST",
+		CURLOPT_POSTFIELDS => "chanode_no=".$chanode_no."&survey_no=&selChangwat=".$selChangwat."&page=".$i."",
+		CURLOPT_HTTPHEADER => array(
+			"cache-control: no-cache",
+			"content-type: application/x-www-form-urlencoded",
+			"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+		// $xpath->query("//table")
+		$tables	= $dom->getElementsByTagName('table');
+			foreach ($tables as $num => $table) {
+				if ($num > 0) {
+					$tables_select = $tables->item($num);
+					$tables_n = $tables_select->getElementsByTagName('tr')->item(2);
+					$tr_0 	= $tables_select->getElementsByTagName('tr')->item(0);
+
+				 		$tds = $tables_n->getElementsByTagName('td'); 
+				 		$tds_0 = $tr_0->getElementsByTagName('td')->item(0)->nodeValue; 
+				 		$head_td = explode('/', $tds_0);
+
+				        $detail_obj[$num]['id_province'] =  $selChangwat;
+				        $detail_obj[$num]['office'] 	=  $head_td[1];
+				        $detail_obj[$num]['district'] 	=  $head_td[2];
+				        $detail_obj[$num]['sub_district'] =  $tds->item(5)->nodeValue;
+				        $detail_obj[$num]['price'] 		=  $tds->item(6)->nodeValue;
+				        $detail_obj[$num]['deed'] 		=  $tds->item(4)->nodeValue;
+				        $detail_obj[$num]['sheet'] 		=  $tds->item(1)->nodeValue;
+				        $detail_obj[$num]['utm'] 		=  $tds->item(0)->nodeValue;
+				        $detail_obj[$num]['survey'] 	=  $tds->item(2)->nodeValue;
+				        $detail_obj[$num]['land_no'] 	=  $tds->item(3)->nodeValue;
+				}
+			}
+		return $detail_obj;
+	}
+?>

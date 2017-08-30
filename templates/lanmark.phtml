@@ -1,0 +1,52 @@
+<?php
+	$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+	$usr = 'tecmove';
+	$pwd = 'tecmove1';
+	$pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+
+	$selectStatement = $pdo->select(['PROVINCE_CODE'])->from('province');
+	$stmt = $selectStatement->execute();
+	$province = $stmt->fetchAll();
+	foreach ($province as $key => $provinc_id) {
+	    $curl = curl_init();
+			curl_setopt_array($curl, array(
+			CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/r_constr_price.asp?selChangwat=".$provinc_id['PROVINCE_CODE']."&constr_code=&ac_byear=2559&ac_eyear=2562",
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_ENCODING => "",
+			CURLOPT_MAXREDIRS => 10,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+			CURLOPT_CUSTOMREQUEST => "GET",
+			CURLOPT_HTTPHEADER => array(
+			"content-type: application/x-www-form-urlencoded",
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+		$data;
+		$thirdTable = $dom->getElementsByTagName('table')->item(1);
+		foreach($thirdTable->getElementsByTagName('tr') as $key => $tr)
+		{
+	    	$tds = $tr->getElementsByTagName('td'); // get the columns in this row
+			if($tds->length >= 4 && $key != 0){
+		        $data[$key]['code'] =  $tds->item(0)->nodeValue; // A
+		        $data[$key]['building_type'] = $tds->item(1)->nodeValue; // B
+		        $data[$key]['price'] =  $tds->item(2)->nodeValue; // C
+		        $data[$key]['note'] =  $tds->item(3)->nodeValue; // C
+		    }
+		}	
+		// echo '<pre>',print_r($data,1),'</pre>';
+
+		$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+		$usr = 'tecmove';
+		$pwd = 'tecmove1';
+		foreach ($data as $value) {
+		$pdo->insert(['code','building_type','price','note','province'])->into('cost_estimate')->values([''.$value['code'].'', ''.$value['building_type'].'', ''.$value['price'].'',''.$value['note'].'', ''.$provinc_id['PROVINCE_CODE'].''])->execute(true);
+		}
+	}
+	
+?>

@@ -1,0 +1,11 @@
+<?php 
+// require_once 'vendor/autoload.php';
+
+$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+$usr = 'tecmove';
+$pwd = 'tecmove1';
+
+$pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+$pdo->insert(array('id'))->into('users')->columns(array('usr', 'pwd'))->values(array(1234, 'your_username', 'your_password'))->execute(true);
+// $pdo->execute(false);
+ ?>

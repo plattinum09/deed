@@ -1,0 +1,131 @@
+<?php
+	$dsn = 'mysql:host=tmtax.cv0jkfjmbabw.ap-southeast-1.rds.amazonaws.com;dbname=landmark_db;charset=utf8';
+	$usr = 'tecmove';
+	$pwd = 'tecmove1';
+	$pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+
+	$selectStatement = $pdo->select(['nrg_n','cw','br','province'])->from('appraise')->where('province','!=', 10);
+	$stmt = $selectStatement->execute();
+	$appraises = $stmt->fetchAll();
+	$global_obj  = [];
+	$global_header  = [];
+
+	foreach ($appraises as $key => $appraise) {
+		// echo $appraise['nrg_n'].'</br>';
+		// $provinc_id['PROVINCE_CODE'] = 81;
+    	$curl = curl_init();
+    	curl_setopt_array($curl, array(
+		CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/r_condo_price.asp?nrg_n=".$appraise['nrg_n']."&cw=".$appraise['cw']."&br=".$appraise['br']."",
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_TIMEOUT => 30,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "GET",
+		CURLOPT_HTTPHEADER => array(
+			"cache-control: no-cache",
+			"content-type: application/x-www-form-urlencoded",
+			"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+		$dom_title = $dom->getElementsByTagName('table');
+		if ($dom_title->length > 0) { 
+		   foreach($dom_title->item(0)->getElementsByTagName('tr') as $key => $tr){
+				$tds = $tr->getElementsByTagName('td');
+				if ($key == 0) {
+					$arr_key = ['','สำนักงานที่ดิน จังหวัด ','สาขา', 'วันที่ประกาศ','วันที่บังคับใช้ '];
+					foreach ($tds->item(0)->getElementsByTagName('b') as $num =>$b_text) {
+						$value  = $b_text->textContent;
+						$global_header[] = makeJson($arr_key[$num],$value);
+					}
+				}else if($key < 15){
+					$key 	= $tds->item(0)->textContent ? $tds->item(0)->textContent : '';
+					$value  = $tds->item(1)->textContent ? $tds->item(1)->textContent : '';
+					$global_header[] = makeJson($key,$value);
+				}
+			}
+		}
+		
+
+		$insertStatement = $pdo->insert(['a0','a1','a2','a3','a4','a5','a6','a7','a8','a9','a10','a11','a12','a13','a14'])->into('header_appraise')->values([''.$global_header[0].'',''.$global_header[1].'',''.$global_header[2].'',''.$global_header[3].'',''.$global_header[4].'',''.$global_header[5].'',''.$global_header[6].'',''.$global_header[7].'',''.$global_header[8].'',''.$global_header[9].'',''.$global_header[10].'',''.$global_header[11].'',''.$global_header[12].'',''.$global_header[13].'',''.$global_header[14].''])->execute(true);
+	
+		$dataTable 	= $dom->getElementsByTagName('table')->item(1);
+
+		if (!empty($dataTable)) {
+    		foreach($dataTable->getElementsByTagName('tr') as $key => $tr){
+		 		$tds = $tr->getElementsByTagName('td'); // get the columns in this row
+				if($key  > 2){
+					$num = $tds->item(0)->getAttribute('colspan') == 2 ? 0 : 1;
+			        // $global_obj['building'] 	=  preg_replace("/\s/",'',$tds->item(0)->nodeValue);
+			        // $global_obj['floor'] 		=  preg_replace("/\s/",'',$tds->item($num)->nodeValue);
+			        // $global_obj['cost_estimate'] =  $tds->item((1+$num))->nodeValue;
+			        // $global_obj['suite_type'] =  $tds->item((2+$num))->nodeValue;
+			        $pdo->insert(['building','floor','cost_estimate','suite_type','province','header_appraise','appraise_br','nrg_n'])->into('appraise_detail')->values([ ''.preg_replace("/\s/",'',$tds->item(0)->nodeValue).'',''.preg_replace("/\s/",'',$tds->item($num)->nodeValue).'', ''.$tds->item((1+$num))->textContent.'', ''.$tds->item((2+$num))->textContent.'',''.$appraise['province'].'',$insertStatement,''.$appraise['br'].'',''.$appraise['nrg_n'].''])->execute(true);
+			    }
+			}
+		}
+	}
+
+	function makeJson($key , $value)
+	{
+		$html = ''.$key.''.$value.'';
+		return $html;
+	}
+	function getAppraise($detail)
+	{
+		$detail = str_replace("'", "", $detail);
+		$detail = explode('(', $detail);
+		$detail = explode(');', $detail[1]);
+		$detail = explode(',', $detail[0]);
+
+		$result['nrg_n'] 	= $detail[0];
+		$result['cw'] 		= $detail[1];
+		$result['br'] 		= $detail[2];
+		return $result;
+	}
+
+	function getMorePage($i, $selChangwat, $chanode_no = null, $survey_no = null)
+	{
+		global $global_obj;
+		$detail_obj = [];
+		$curl = curl_init();
+    	curl_setopt_array($curl, array(
+		CURLOPT_URL => "http://property.treasury.go.th/pvmwebsite/search_data/s_condo_result.asp",
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_TIMEOUT => 30,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "POST",
+		CURLOPT_POSTFIELDS => "selChangwat=".$selChangwat."&constr_code=&page=".$i."",
+		CURLOPT_HTTPHEADER => array(
+			"cache-control: no-cache",
+			"content-type: application/x-www-form-urlencoded",
+			"postman-token: 9dea9b3c-0910-28f6-8e4c-310b81519696"
+			),
+		));
+	    $response = curl_exec($curl);
+	    $err = curl_error($curl);
+	    curl_close($curl);
+
+	 	$dom = new DOMDocument();
+		@$dom->loadHTML($response);
+
+		$dataTable 	= $dom->getElementsByTagName('table')->item(1);
+		foreach($dataTable->getElementsByTagName('tr') as $key => $tr){
+	 	$tds = $tr->getElementsByTagName('td'); // get the columns in this row
+			if($key != 0){
+		        $detail_obj[$key] =  getAppraise($tds->item(0)->getElementsByTagName('a')->item(0)->getAttribute('onclick'));
+		        $detail_obj[$key]['apartment'] =  $tds->item(0)->nodeValue;
+		        $detail_obj[$key]['province'] =  $selChangwat;
+		    }
+		}
+		return $detail_obj;
+	}
+?>
